@@ -1,0 +1,24 @@
+{
+  "name": "fastify-server",
+  "version": "1.0.0",
+  "description": "",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test:load": "npx -y autocannon -c 100 -d 10 http://localhost:6081/api/v1/users",
+    "test:load:health": "npx -y autocannon -c 100 -d 10 http://localhost:6081/api/v1/health",
+    "test:load:post": "npx -y autocannon -c 50 -d 10 -m POST -H \"Content-Type: application/json\" -b '{\"name\":\"LoadTest\",\"email\":\"load@test.com\"}' http://localhost:6081/api/v1/users",
+    "test:ab": "ab -n 5000 -c 100 http://localhost:6081/api/v1/users",
+    "test:ab:post": "ab -n 2000 -c 50 -p payload.json -T application/json http://localhost:6081/api/v1/users/"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@fastify/cors": "^11.3.0",
+    "dotenv": "^18.0.5",
+    "fastify": "^5.12.5"
+  }
+}

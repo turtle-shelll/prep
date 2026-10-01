@@ -1,124 +1,112 @@
-# Scaled Node.js Server (Production Architecture)
+# Express vs Fastify Production Comparison & Benchmarking
 
-A standard, production-ready Express.js server architecture following MVC / layered separation of concerns.
+This repository contains two production-architected HTTP servers implementing the exact same business logic and endpoints to allow side-by-side performance benchmarking:
+
+1. **[`express-server/`](./express-server/)** — Running on port **`6080`**
+2. **[`fastify-server/`](./fastify-server/)** — Running on port **`6081`**
 
 ---
 
-## 📁 Directory Structure
+## 📁 Repository Structure
 
 ```text
 scaled-nodeServer/
-├── src/
-│   ├── config/
-│   │   └── index.js                 # Centralized environment configuration
-│   ├── controllers/
-│   │   └── user.controller.js       # Request handlers & business logic
-│   ├── middlewares/
-│   │   ├── logger.middleware.js     # Request duration & access logging
-│   │   ├── validate.middleware.js   # Payload validation middleware
-│   │   └── error.middleware.js      # 404 & centralized error handlers
-│   ├── routes/
-│   │   ├── index.js                 # Central router (API versioning)
-│   │   └── user.routes.js           # User resource routes
-│   ├── app.js                       # Express app configuration & middleware pipeline
-│   └── server.js                    # HTTP server entrypoint & graceful shutdown
-├── .env                             # Environment variables (git-ignored)
-├── .env.example                     # Example environment variables template
-├── .gitignore                       # Git ignore rules
-├── package.json                     # NPM dependencies & scripts
-└── README.md                        # Documentation
+├── express-server/                  # Express implementation (Port 6080)
+│   ├── src/
+│   │   ├── config/                  # Environment config
+│   │   ├── controllers/             # Controller logic
+│   │   ├── middlewares/             # Logger, validator, error middlewares
+│   │   ├── routes/                  # Express routes
+│   │   ├── app.js                   # Express app setup
+│   │   └── server.js                # Server entrypoint & shutdown
+│   ├── package.json
+│   ├── payload.json
+│   └── README.md
+│
+├── fastify-server/                  # Fastify implementation (Port 6081)
+│   ├── src/
+│   │   ├── config/                  # Environment config
+│   │   ├── controllers/             # Controller logic
+│   │   ├── hooks/                   # Fastify lifecycle hooks (logger)
+│   │   ├── schemas/                 # JSON Schemas (Ajv + fast-json-stringify)
+│   │   ├── routes/                  # Fastify route plugins
+│   │   ├── app.js                   # Fastify app builder
+│   │   └── server.js                # Server entrypoint & shutdown
+│   ├── package.json
+│   ├── payload.json
+│   └── README.md
+│
+└── README.md                        # Master benchmarking guide
 ```
 
 ---
 
-## 🚀 Getting Started
+## 📡 Identical Endpoints Across Both Frameworks
 
-### 1. Install Dependencies
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/` | Root framework & welcome metadata |
+| `GET` | `/api/v1/health` | Health status and uptime |
+| `GET` | `/api/v1/users` | List all users |
+| `GET` | `/api/v1/users/:id` | Get single user by ID |
+| `POST` | `/api/v1/users` | Create user (requires `{ "name", "email" }`) |
+
+---
+
+## 🚀 How to Run Both Servers
+
+Open two terminal windows:
+
+### Terminal 1: Express Server (Port 6080)
 ```bash
+cd node.js/scaled-nodeServer/express-server
 npm install
+NODE_ENV=production npm start
 ```
 
-### 2. Configure Environment Variables
-Copy `.env.example` to `.env` if not already present:
+### Terminal 2: Fastify Server (Port 6081)
 ```bash
-cp .env.example .env
-```
-
-### 3. Run the Server
-```bash
-# Production mode
-npm start
-
-# Development mode (with file-watch auto-reload)
-npm run dev
+cd node.js/scaled-nodeServer/fastify-server
+npm install
+NODE_ENV=production npm start
 ```
 
 ---
 
-## 📡 API Endpoints
+## ⚡ Side-by-Side Load Testing (Autocannon)
 
-Base URL: `http://localhost:6080/api/v1`
+Run these tests in a third terminal to compare throughput (Req/Sec) and tail latency (p99):
 
-| Method | Endpoint | Description | Middleware Used |
-| :--- | :--- | :--- | :--- |
-| `GET` | `/api/v1/health` | Service health status & uptime | Logger (skipped in prod if 200) |
-| `GET` | `/api/v1/users` | List all users | Logger |
-| `GET` | `/api/v1/users/:id` | Get user by ID | Logger |
-| `POST` | `/api/v1/users` | Create a new user | Logger, `validateCreateUser` |
-
----
-
-## 🛡️ Middlewares Included
-
-1. **`requestLogger`** ([`src/middlewares/logger.middleware.js`](./src/middlewares/logger.middleware.js)):
-   - **Production Mode (`NODE_ENV=production`)**: Outputs structured JSON lines directly to stdout (compatible with Datadog, CloudWatch, ELK), and skips logging high-frequency `/health` requests to eliminate event-loop latency.
-   - **Development Mode**: Outputs human-readable colored request duration logs.
-2. **`validateCreateUser`** ([`src/middlewares/validate.middleware.js`](./src/middlewares/validate.middleware.js)):
-   - Validates that `name` and `email` are supplied before reaching the controller.
-3. **`notFoundHandler` & `errorHandler`** ([`src/middlewares/error.middleware.js`](./src/middlewares/error.middleware.js)):
-   - Centralized 404 handling and global unhandled error formatting.
-
----
-
-## ⚡ Load Testing Scripts
-
-Convenient load testing scripts configured for port `6080`:
+### Test 1: GET `/api/v1/users` (100 connections, 10s)
 
 ```bash
-# Autocannon GET benchmark (100 concurrent connections, 10s)
-npm run test:load
+# Express (Port 6080)
+npx -y autocannon -c 100 -d 10 http://localhost:6080/api/v1/users
 
-# Autocannon POST benchmark with JSON payload
-npm run test:load:post
+# Fastify (Port 6081)
+npx -y autocannon -c 100 -d 10 http://localhost:6081/api/v1/users
+```
 
-# ApacheBench GET benchmark (5,000 requests, 100 concurrency)
-npm run test:ab
+### Test 2: POST `/api/v1/users` (50 connections, 10s with JSON body)
 
-# ApacheBench POST benchmark (2,000 requests, 50 concurrency)
-npm run test:ab:post
+```bash
+# Express (Port 6080)
+cd express-server && npm run test:load:post
+
+# Fastify (Port 6081)
+cd fastify-server && npm run test:load:post
 ```
 
 ---
 
-## 🧪 Testing with cURL
+## 🔍 Key Architectural Differences
 
-```bash
-# 1. Health check
-curl http://localhost:6080/api/v1/health
-
-# 2. Get all users
-curl http://localhost:6080/api/v1/users
-
-# 3. Get single user
-curl http://localhost:6080/api/v1/users/1
-
-# 4. Create user (Validation failure test - missing email)
-curl -X POST http://localhost:6080/api/v1/users \
-  -H "Content-Type: application/json" \
-  -d '{"name": "Hardik"}'
-
-# 5. Create user (Success)
-curl -X POST http://localhost:6080/api/v1/users \
-  -H "Content-Type: application/json" \
-  -d '{"name": "Hardik Mistry", "email": "hardik@example.com"}'
-```
+| Feature | Express 5 | Fastify 5 |
+| :--- | :--- | :--- |
+| **Default Port** | `6080` | `6081` |
+| **JSON Serialization** | Standard `JSON.stringify()` | Pre-compiled `fast-json-stringify` (2-3x faster) |
+| **Input Validation** | Manual middleware (`validateCreateUser`) | Built-in `Ajv` JSON Schema validator |
+| **Routing Algorithm** | Linear Regex search | Radix-tree router (`find-my-way`) |
+| **Extensibility Model**| Middlewares (`app.use`) | Encapsulated Plugins (`fastify.register`) |
+| **Lifecycle Hooks** | `(req, res, next)` pipeline | `onRequest`, `preHandler`, `onResponse`, etc. |
+| **Built-in Logging** | Needs external logger | Built-in Pino integration |
